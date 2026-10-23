@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>VXC Obfuscator</title>
+<style>
+  /* ── Reset ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Tokens ── */
+  :root {
+    --bg:         #080b0f;
+    --bg2:        #0d1117;
+    --bg3:        #161b22;
+    --bg4:        #1c2128;
+    --border:     #30363d;
+    --border-hi:  #444c56;
+    --accent:     #00d4ff;
+    --accent2:    #7928ca;
+    --accent3:    #ff0080;
+    --text:       #e6edf3;
+    --text2:      #8b949e;
+    --text3:      #484f58;
+    --green:      #3fb950;
+    --yellow:     #d29922;
+    --red:        #f85149;
+    --purple:     #bc8cff;
+    --font-mono:  'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    --font-ui:    'Inter', 'Segoe UI', system-ui, sans-serif;
+    --radius:     6px;
+    --radius-lg:  12px;
+    --shadow:     0 8px 32px rgba(0,0,0,.6);
+  }
+
+  /* ── Base ── */
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid noise background ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Layout ── */
+  .shell {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    background: rgba(8,11,15,.9);
+    backdrop-filter: blur(12px);
+    padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 18px; font-weight: 700; letter-spacing: -.5px;
+  }
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .logo-vxc { color: var(--accent); }
+  .logo-sep { color: var(--text3); margin: 0 2px; }
+  .logo-sub { color: var(--text2); font-size: 13px; font-weight: 400; }
+
+  .header-right {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .badge {
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 2px 8px; border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .badge.green { border-color: var(--green); color: var(--green); }
+
+  /* ── Main ── */
+  main {
+    flex: 1;
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 20px;
+    max-width: 1400px; width: 100%; margin: 0 auto;
+  }
+
+  /* ── Hero strip ── */
+  .hero {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 20px;
+    background: linear-gradient(90deg, rgba(0,212,255,.06), rgba(121,40,202,.06));
+    border: 1px solid rgba(0,212,255,.12);
+    border-radius: var(--radius-lg);
+  }
+  .hero-icon {
+    font-size: 28px; flex-shrink: 0;
+    filter: drop-shadow(0 0 8px var(--accent));
+  }
+  .hero-text h1 {
+    font-size: 15px; font-weight: 700; color: var(--text);
+    font-family: var(--font-mono);
+  }
+  .hero-text p {
+    font-size: 12px; color: var(--text2); margin-top: 2px;
+  }
+  .layer-pills {
+    margin-left: auto;
+    display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
+  }
+  .pill {
+    font-family: var(--font-mono); font-size: 10px;
+    padding: 2px 8px; border-radius: 20px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    white-space: nowrap;
+  }
+  .pill.active { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Editor area ── */
+  .editors {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    flex: 1;
+  }
+  @media (max-width: 900px) {
+    .editors { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    display: flex; flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+  }
+  .panel-title {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono); font-size: 12px; color: var(--text2);
+  }
+  .panel-title .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .dot-in  { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+  .dot-out { background: var(--green);  box-shadow: 0 0 6px var(--green); }
+
+  .panel-actions {
+    display: flex; gap: 6px;
+  }
+  .btn-sm {
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 4px 10px; border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg4); color: var(--text2);
+    cursor: pointer; transition: all .15s;
+  }
+  .btn-sm:hover {
+    border-color: var(--border-hi); color: var(--text);
+  }
+  .btn-sm.accent {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(0,212,255,.08);
+  }
+  .btn-sm.accent:hover {
+    background: rgba(0,212,255,.16);
+  }
+
+  textarea, .output-area {
+    flex: 1;
+    font-family: var(--font-mono); font-size: 13px;
+    line-height: 1.7;
+    padding: 16px;
+    background: var(--bg2);
+    color: var(--text);
+    border: none; outline: none; resize: none;
+    min-height: 420px;
+    tab-size: 2;
+  }
+  textarea::placeholder { color: var(--text3); }
+
+  .output-area {
+    overflow-y: auto;
+    white-space: pre-wrap; word-break: break-all;
+    color: var(--text2);
+    cursor: text;
+    user-select: text;
+  }
+  .output-area.has-content { color: var(--green); }
+  .output-area .placeholder {
+    color: var(--text3);
+    font-style: italic;
+  }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--bg3);
+    font-family: var(--font-mono); font-size: 11px; color: var(--text3);
+    flex-wrap: wrap;
+  }
+  .stat {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .stat-label { color: var(--text3); }
+  .stat-value { color: var(--text2); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.yellow{ color: var(--yellow); }
+  .stat-value.accent{ color: var(--accent); }
+
+  /* ── Run button ── */
+  .run-area {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .btn-run {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+    padding: 10px 28px; border-radius: var(--radius);
+    border: 1px solid var(--accent);
+    background: linear-gradient(135deg, rgba(0,212,255,.15), rgba(121,40,202,.1));
+    color: var(--accent);
+    cursor: pointer; transition: all .2s;
+    letter-spacing: .5px;
+    position: relative; overflow: hidden;
+  }
+  .btn-run::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(0,212,255,.2), rgba(121,40,202,.15));
+    opacity: 0; transition: opacity .2s;
+  }
+  .btn-run:hover::before { opacity: 1; }
+  .btn-run:hover {
+    box-shadow: 0 0 20px rgba(0,212,255,.3);
+    transform: translateY(-1px);
+  }
+  .btn-run:active { transform: translateY(0); }
+  .btn-run.loading { opacity: .7; cursor: not-allowed; pointer-events: none; }
+  .btn-run .spinner {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid rgba(0,212,255,.3);
+    border-top-color: var(--accent);
+    animation: spin .7s linear infinite;
+    display: none;
+  }
+  .btn-run.loading .spinner { display: block; }
+  .btn-run.loading .run-icon { display: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .btn-secondary {
+    font-family: var(--font-mono); font-size: 12px;
+    padding: 8px 16px; border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text2);
+    cursor: pointer; transition: all .15s;
+  }
+  .btn-secondary:hover { border-color: var(--border-hi); color: var(--text); }
+
+  /* ── Error toast ── */
+  .toast {
+    display: none;
+    align-items: center; gap: 10px;
+    padding: 12px 16px;
+    background: rgba(248,81,73,.1);
+    border: 1px solid rgba(248,81,73,.3);
+    border-radius: var(--radius);
+    color: var(--red); font-size: 13px;
+    font-family: var(--font-mono);
+  }
+  .toast.visible { display: flex; }
+  .toast-icon { font-size: 16px; }
+
+  /* ── Success flash ── */
+  .copy-flash {
+    position: fixed; bottom: 24px; right: 24px;
+    padding: 12px 20px; border-radius: var(--radius);
+    background: rgba(63,185,80,.15);
+    border: 1px solid rgba(63,185,80,.4);
+    color: var(--green); font-family: var(--font-mono); font-size: 13px;
+    transform: translateY(80px); opacity: 0;
+    transition: all .25s cubic-bezier(.17,.67,.35,1.2);
+    z-index: 999; pointer-events: none;
+  }
+  .copy-flash.show { transform: translateY(0); opacity: 1; }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    height: 2px; background: var(--bg3);
+    position: relative; overflow: hidden;
+    display: none;
+  }
+  .progress-wrap.visible { display: block; }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+    background-size: 200% 100%;
+    animation: progress-anim 1.5s linear infinite;
+    width: 100%;
+  }
+  @keyframes progress-anim {
+    0%   { background-position: 0% 0%; }
+    100% { background-position: 200% 0%; }
+  }
+
+  /* ── Layer indicator ── */
+  .layer-track {
+    display: flex; gap: 4px; align-items: center;
+    padding: 12px 0;
+  }
+  .layer-step {
+    flex: 1; height: 3px; border-radius: 2px;
+    background: var(--bg4); border: 1px solid var(--border);
+    transition: all .3s;
+    position: relative;
+  }
+  .layer-step::after {
+    content: attr(data-label);
+    position: absolute; top: 8px; left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-mono); font-size: 9px; color: var(--text3);
+    white-space: nowrap;
+  }
+  .layer-step.done {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 6px rgba(0,212,255,.4);
+  }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; color: var(--text3);
+    font-family: var(--font-mono);
+  }
+  footer a { color: var(--text3); text-decoration: none; }
+  footer a:hover { color: var(--accent); }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+
+  /* ── Line counter on textarea ── */
+  .editor-wrap {
+    position: relative; flex: 1; display: flex;
+  }
+  .line-nums {
+    padding: 16px 8px 16px 12px;
+    background: var(--bg3);
+    color: var(--text3); font-family: var(--font-mono); font-size: 13px;
+    line-height: 1.7; text-align: right;
+    user-select: none; border-right: 1px solid var(--border);
+    min-width: 42px;
+    overflow: hidden;
+  }
+  .editor-wrap textarea {
+    border-radius: 0;
+    padding-left: 12px;
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="shell">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🔒</div>
+      <span><span class="logo-vxc">VXC</span><span class="logo-sep">/</span><span>obfuscator</span></span>
+      <span class="logo-sub">for Roblox</span>
+    </div>
+    <div class="header-right">
+      <span class="badge green">● 7 Layers</span>
+      <span class="badge">v1.0</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-icon">⚡</div>
+      <div class="hero-text">
+        <h1>VXC Obfuscator — Roblox Lua Protection</h1>
+        <p>Anti-Tamper · Dual VM · LZ Compression · Hardcore Global · FFI/Debug Nullification</p>
+      </div>
+      <div class="layer-pills">
+        <span class="pill active">L1 AntiTamper</span>
+        <span class="pill active">L2 VM Core</span>
+        <span class="pill active">L3 Compress</span>
+        <span class="pill active">L4 DoubleVM</span>
+        <span class="pill active">L5 Global</span>
+        <span class="pill active">L6 FFI</span>
+        <span class="pill active">L7 Debug</span>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="run-area">
+      <button class="btn-run" id="btnRun" onclick="runObfuscate()">
+        <div class="spinner"></div>
+        <span class="run-icon">▶</span>
+        <span>Obfuscate</span>
+      </button>
+      <button class="btn-secondary" onclick="clearAll()">Clear</button>
+      <button class="btn-secondary" onclick="loadExample()">Load Example</button>
+      <div id="toast" class="toast">
+        <span class="toast-icon">⚠</span>
+        <span id="toastMsg">Error</span>
+      </div>
+    </div>
+
+    <!-- Layer progress -->
+    <div>
+      <div class="layer-track" id="layerTrack">
+        <div class="layer-step" data-label="L1"></div>
+        <div class="layer-step" data-label="L2"></div>
+        <div class="layer-step" data-label="L3"></div>
+        <div class="layer-step" data-label="L4"></div>
+        <div class="layer-step" data-label="L5"></div>
+        <div class="layer-step" data-label="L6"></div>
+        <div class="layer-step" data-label="L7"></div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"></div>
+    </div>
+
+    <!-- Editors -->
+    <div class="editors">
+      <!-- Input -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <div class="dot dot-in"></div>
+            INPUT — Lua Source
+          </div>
+          <div class="panel-actions">
+            <button class="btn-sm" onclick="pasteClipboard()">Paste</button>
+            <button class="btn-sm accent" onclick="runObfuscate()">▶ Run</button>
+          </div>
+        </div>
+        <div class="editor-wrap">
+          <div class="line-nums" id="lineNums">1</div>
+          <textarea id="inputArea"
+            placeholder="-- Paste your Lua script here&#10;-- Example:&#10;local Players = game:GetService('Players')&#10;print('Hello, ' .. Players.LocalPlayer.Name)"
+            oninput="updateLineNums(); updateInputStats()"
+            onscroll="syncScroll()"
+          ></textarea>
+        </div>
+        <div class="stats-bar">
+          <div class="stat">
+            <span class="stat-label">chars</span>
+            <span class="stat-value" id="statChars">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">lines</span>
+            <span class="stat-value" id="statLines">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">size</span>
+            <span class="stat-value" id="statSize">0 B</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Output -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <div class="dot dot-out"></div>
+            OUTPUT — Obfuscated
+          </div>
+          <div class="panel-actions">
+            <button class="btn-sm" onclick="copyOutput()">Copy</button>
+            <button class="btn-sm accent" onclick="downloadOutput()">⬇ Download</button>
+          </div>
+        </div>
+        <div class="output-area" id="outputArea">
+          <span class="placeholder">// Output akan muncul di sini setelah obfuscate...</span>
+        </div>
+        <div class="stats-bar">
+          <div class="stat">
+            <span class="stat-label">output size</span>
+            <span class="stat-value green" id="statOutSize">—</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">ratio</span>
+            <span class="stat-value yellow" id="statRatio">—</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">elapsed</span>
+            <span class="stat-value accent" id="statElapsed">—</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">layers</span>
+            <span class="stat-value green" id="statLayers">7</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Copy flash -->
+  <div class="copy-flash" id="copyFlash">✓ Copied to clipboard</div>
+
+  <footer>
+    <span>VXC Obfuscator · Roblox Lua Protection · 7-Layer System</span>
+    <span>Deploy via <a href="https://vercel.com" target="_blank">Vercel</a> · Source on <a href="https://github.com" target="_blank">GitHub</a></span>
+  </footer>
+
+</div>
+
+<script>
+  /* ── Config ── */
+  const API_URL = '/api/obfuscate';
+  let outputContent = '';
+
+  /* ── Line numbers ── */
+  function updateLineNums() {
+    const ta = document.getElementById('inputArea');
+    const ln = document.getElementById('lineNums');
+    const lines = ta.value.split('\n').length;
+    ln.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
+  }
+
+  function syncScroll() {
+    const ta = document.getElementById('inputArea');
+    const ln = document.getElementById('lineNums');
+    ln.scrollTop = ta.scrollTop;
+  }
+
+  /* ── Input stats ── */
+  function updateInputStats() {
+    const val = document.getElementById('inputArea').value;
+    document.getElementById('statChars').textContent = val.length.toLocaleString();
+    document.getElementById('statLines').textContent = val.split('\n').length.toLocaleString();
+    document.getElementById('statSize').textContent  = formatBytes(new Blob([val]).size);
+  }
+
+  function formatBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+    return (n/1024/1024).toFixed(2) + ' MB';
+  }
+
+  /* ── Layer animation ── */
+  function animateLayers(active) {
+    const steps = document.querySelectorAll('.layer-step');
+    steps.forEach(s => s.classList.remove('done'));
+    if (!active) return;
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i >= steps.length) { clearInterval(interval); return; }
+      steps[i].classList.add('done');
+      i++;
+    }, 120);
+  }
+
+  /* ── Obfuscate ── */
+  async function runObfuscate() {
+    const source = document.getElementById('inputArea').value.trim();
+    if (!source) {
+      showToast('Input kosong — paste script Lua dulu.');
+      return;
+    }
+
+    const btn = document.getElementById('btnRun');
+    btn.classList.add('loading');
+    document.getElementById('progressWrap').classList.add('visible');
+    hideToast();
+    animateLayers(true);
+
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        showToast(data.error || data.message || 'Unknown error');
+        return;
+      }
+
+      outputContent = data.result;
+      const out = document.getElementById('outputArea');
+      out.textContent = outputContent;
+      out.classList.add('has-content');
+
+      // Update output stats
+      const s = data.stats;
+      document.getElementById('statOutSize').textContent = formatBytes(s.outputSize);
+      document.getElementById('statRatio').textContent   = s.ratio + 'x';
+      document.getElementById('statElapsed').textContent = s.elapsedMs + 'ms';
+      document.getElementById('statLayers').textContent  = s.layers;
+
+    } catch (err) {
+      showToast('Request failed: ' + err.message);
+    } finally {
+      btn.classList.remove('loading');
+      document.getElementById('progressWrap').classList.remove('visible');
+    }
+  }
+
+  /* ── Copy ── */
+  async function copyOutput() {
+    if (!outputContent) { showToast('Belum ada output.'); return; }
+    await navigator.clipboard.writeText(outputContent);
+    flashCopy();
+  }
+
+  /* ── Download ── */
+  function downloadOutput() {
+    if (!outputContent) { showToast('Belum ada output.'); return; }
+    const blob = new Blob([outputContent], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'obfuscated.lua';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /* ── Paste ── */
+  async function pasteClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      document.getElementById('inputArea').value = text;
+      updateLineNums(); updateInputStats();
+    } catch {
+      showToast('Clipboard access denied — paste manual dengan Ctrl+V.');
+    }
+  }
+
+  /* ── Clear ── */
+  function clearAll() {
+    document.getElementById('inputArea').value = '';
+    document.getElementById('outputArea').innerHTML =
+      '<span class="placeholder">// Output akan muncul di sini setelah obfuscate...</span>';
+    document.getElementById('outputArea').classList.remove('has-content');
+    outputContent = '';
+    updateLineNums(); updateInputStats();
+    document.getElementById('statOutSize').textContent = '—';
+    document.getElementById('statRatio').textContent   = '—';
+    document.getElementById('statElapsed').textContent = '—';
+    animateLayers(false);
+    hideToast();
+  }
+
+  /* ── Example ── */
+  function loadExample() {
+    const example = `-- VXC Example Script
+local Players   = game:GetService("Players")
+local RunService= game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Simple ESP example
+local function createBillboard(char)
+  local bb = Instance.new("BillboardGui")
+  bb.Size = UDim2.new(0, 100, 0, 40)
+  bb.AlwaysOnTop = true
+  bb.Adornee = char:FindFirstChild("HumanoidRootPart")
+  bb.Parent  = char
+
+  local lbl = Instance.new("TextLabel")
+  lbl.BackgroundTransparency = 1
+  lbl.Size = UDim2.new(1, 0, 1, 0)
+  lbl.Text = char.Name
+  lbl.TextColor3 = Color3.fromRGB(255, 0, 80)
+  lbl.TextStrokeTransparency = 0
+  lbl.Font = Enum.Font.GothamBold
+  lbl.TextSize = 14
+  lbl.Parent = bb
+end
+
+Players.PlayerAdded:Connect(function(p)
+  p.CharacterAdded:Connect(function(c)
+    task.wait(1)
+    if p ~= LocalPlayer then
+      createBillboard(c)
+    end
+  end)
+end)
+
+for _, p in ipairs(Players:GetPlayers()) do
+  if p ~= LocalPlayer and p.Character then
+    createBillboard(p.Character)
+  end
+end
+
+print("[VXC] ESP loaded — " .. tostring(#Players:GetPlayers()) .. " players")`;
+
+    document.getElementById('inputArea').value = example;
+    updateLineNums(); updateInputStats();
+  }
+
+  /* ── Toast ── */
+  function showToast(msg) {
+    document.getElementById('toastMsg').textContent = msg;
+    document.getElementById('toast').classList.add('visible');
+  }
+  function hideToast() {
+    document.getElementById('toast').classList.remove('visible');
+  }
+
+  /* ── Copy flash ── */
+  function flashCopy() {
+    const el = document.getElementById('copyFlash');
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2000);
+  }
+
+  /* ── Init ── */
+  updateLineNums();
+  updateInputStats();
+
+  /* ── Keyboard shortcut: Ctrl+Enter ── */
+  document.getElementById('inputArea').addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      runObfuscate();
+    }
+  });
+</script>
+</body>
+</html>
