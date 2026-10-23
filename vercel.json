@@ -1,13 +1,8 @@
 {
   "version": 2,
-  "functions": {
-    "api/obfuscate.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "rewrites": [
-    { "source": "/api/obfuscate", "destination": "/api/obfuscate" },
-    { "source": "/(.*)", "destination": "/public/$1" }
+    { "source": "/api/obfuscate", "destination": "/api/obfuscate.js" },
+    { "source": "/(.*)",          "destination": "/public/$1" }
   ],
   "headers": [
     {
