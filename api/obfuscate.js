@@ -1,10 +1,26 @@
-// Vercel Serverless Function: /api/obfuscate
-// POST { source: string } → { result: string, stats: object }
+// ============================================================
+// FILE: api/obfuscate.js
+// Ganti seluruh isi file ini
+// ============================================================
 
 const { obfuscate } = require('../src/core/pipeline');
 
+// Manual body parser — Vercel serverless tidak auto-parse JSON
+function parseBody(req) {
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => {
+      try { resolve(JSON.parse(data)); }
+      catch { resolve({}); }
+    });
+    req.on('error', () => resolve({}));
+  });
+}
+
 module.exports = async (req, res) => {
-  // CORS
+  // Set JSON header pertama kali sebelum apapun
+  res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -18,10 +34,10 @@ module.exports = async (req, res) => {
   }
 
   try {
+    // Parse body — handle keduanya: sudah di-parse Vercel atau belum
     let body = req.body;
-    // Vercel auto-parse JSON jika Content-Type: application/json
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch {}
+    if (!body || typeof body !== 'object') {
+      body = await parseBody(req);
     }
 
     const { source } = body || {};
@@ -30,7 +46,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'source is required (string)' });
     }
 
-    if (source.length > 500_000) {
+    if (source.length > 500000) {
       return res.status(413).json({ error: 'Source too large (max 500KB)' });
     }
 
@@ -41,12 +57,12 @@ module.exports = async (req, res) => {
     return res.status(200).json({
       result,
       stats: {
-        inputSize:    source.length,
-        outputSize:   result.length,
-        ratio:        (result.length / source.length).toFixed(2),
-        elapsedMs:    elapsed,
-        layers:       7,
-        timestamp:    new Date().toISOString(),
+        inputSize:  source.length,
+        outputSize: result.length,
+        ratio:      (result.length / source.length).toFixed(2),
+        elapsedMs:  elapsed,
+        layers:     7,
+        timestamp:  new Date().toISOString(),
       }
     });
 
@@ -54,7 +70,7 @@ module.exports = async (req, res) => {
     console.error('[VXC] Error:', err);
     return res.status(500).json({
       error:   'Obfuscation failed',
-      message: err.message,
+      message: err.message || String(err),
     });
   }
 };
